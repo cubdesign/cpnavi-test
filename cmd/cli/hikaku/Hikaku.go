@@ -53,6 +53,34 @@ func compareSlices(slice1, slice2 []interface{}) bool {
 	return reflect.DeepEqual(stringifiedSlice1, stringifiedSlice2)
 }
 
+func convertToMap(data []interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	for _, item := range data {
+		if m, ok := item.(map[string]interface{}); ok {
+			for key, value := range m {
+				result[key] = value // キーと値を追加
+			}
+		}
+	}
+
+	return result
+}
+
+// compareSlicesで引っかかった場合に、どの要素がどう違うのかを、
+// slice1および2をmap[string]interface{}に変換して、
+// compareJSONContentでチェックする
+func compareSliceDeep(slice1, slice2 []interface{}, path string) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+
+	convertedSlice1 := convertToMap(slice1)
+	convertedSlice2 := convertToMap(slice2)
+
+	return compareJSONContent(convertedSlice1, convertedSlice2, path)
+}
+
 // スライスを文字列に変換
 func stringifySlice(slice []interface{}) []string {
 	var result []string
@@ -86,7 +114,10 @@ func compareValues(path string, devValue, prodValue interface{}) bool {
 		if prodVal, ok := prodValue.([]interface{}); ok {
 			// スライスを順序に関係なく比較
 			if !compareSlices(devVal, prodVal) {
-				fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
+				// fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
+				if !compareSliceDeep(devVal, prodVal, path) {
+					fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
+				}
 				return true
 			}
 		} else {
