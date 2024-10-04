@@ -3,9 +3,21 @@ version: '3'
 tasks:
   getjson:
     desc: "Get json"
+    vars:
+      label: "{{.LABEL}}"
+      api: "{{.API}}"
+      apiHost: "{{.APIHOST}}"
+      csvFile: "{{.CSVFILE}}"
+      accessToken: "{{.ACCESSTOKEN}}"
+      exportFolder: "{{.EXPORTFOLDER}}"
     cmds:
-      - go run cmd/cli/get-json/GetJson.go
+      - go run cmd/cli/get-json/GetJson.go --label={{.label}} --api={{.api}} --apiHost={{.apiHost}} --csv={{.csvFile}} --accessToken={{.accessToken}} --exportFolder={{.exportFolder}}
+    silent: false
   hikaku:
     desc: "Hikaku"
+    vars:
+      dirA: "{{.DIRA}}"
+      dirB: "{{.DIRB}}"
     cmds:
-      - go run cmd/cli/hikaku/Hikaku.go
+      - go run cmd/cli/hikaku/Hikaku.go --dirA={{.dirA}} --dirB={{.dirB}}
+    silent: false

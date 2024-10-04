@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -64,10 +64,9 @@ func stringifySlice(slice []interface{}) []string {
 	return result
 }
 
-// 数値を比較するための関数（小さな誤差を許容）
+// 数値を比較するための関数（誤差を許容しない）
 func compareNumbers(devValue, prodValue float64) bool {
-	const epsilon = 1e-6 // 許容する誤差
-	return math.Abs(devValue-prodValue) < epsilon
+	return devValue == prodValue
 }
 
 func compareValues(path string, devValue, prodValue interface{}) bool {
@@ -76,22 +75,22 @@ func compareValues(path string, devValue, prodValue interface{}) bool {
 		if prodVal, ok := prodValue.(float64); ok {
 			// 数値の比較（指数形式と整数形式の違いを許容）
 			if !compareNumbers(devVal, prodVal) {
-				fmt.Printf("Difference in '%s':\n  Development: %.0f\n  Production: %.0f\n\n", path, devVal, prodVal)
+				fmt.Printf("Difference in '%s':\n  dirA: %.0f\n  dirB: %.0f\n\n", path, devVal, prodVal)
 				return true
 			}
 		} else {
-			fmt.Printf("Difference in '%s':\n  Development: %.0f\n  Production: %v\n\n", path, devVal, prodValue)
+			fmt.Printf("Difference in '%s':\n  dirA: %.0f\n  dirB: %v\n\n", path, devVal, prodValue)
 			return true
 		}
 	case []interface{}:
 		if prodVal, ok := prodValue.([]interface{}); ok {
 			// スライスを順序に関係なく比較
 			if !compareSlices(devVal, prodVal) {
-				fmt.Printf("Difference in '%s':\n  Development: %v\n  Production: %v\n\n", path, devValue, prodValue)
+				fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
 				return true
 			}
 		} else {
-			fmt.Printf("Difference in '%s':\n  Development: %v\n  Production: %v\n\n", path, devValue, prodValue)
+			fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
 			return true
 		}
 	case map[string]interface{}:
@@ -101,12 +100,12 @@ func compareValues(path string, devValue, prodValue interface{}) bool {
 				return true
 			}
 		} else {
-			fmt.Printf("Difference in '%s':\n  Development: %v\n  Production: %v\n\n", path, devValue, prodValue)
+			fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
 			return true
 		}
 	default:
 		if !reflect.DeepEqual(devValue, prodValue) {
-			fmt.Printf("Difference in '%s':\n  Development: %v\n  Production: %v\n\n", path, devValue, prodValue)
+			fmt.Printf("Difference in '%s':\n  dirA: %v\n  dirB: %v\n\n", path, devValue, prodValue)
 			return true
 		}
 	}
@@ -125,15 +124,15 @@ func compareJSONContent(devJSON, prodJSON map[string]interface{}, path string) b
 			}
 		} else {
 			// キーが存在しない場合
-			fmt.Printf("Key '%s.%s' is missing in production.\n\n", path, key)
+			fmt.Printf("Key '%s.%s' is missing in dirB.\n\n", path, key)
 			hasDifferences = true
 		}
 	}
 
-	// ProductionにあってDevelopmentにないキーもチェック
+	// dirBにあってdirAにないキーもチェック
 	for key := range prodJSON {
 		if _, exists := devJSON[key]; !exists {
-			fmt.Printf("Key '%s.%s' is missing in development.\n\n", path, key)
+			fmt.Printf("Key '%s.%s' is missing in dirA.\n\n", path, key)
 			hasDifferences = true
 		}
 	}
@@ -145,13 +144,13 @@ func compareJSONContent(devJSON, prodJSON map[string]interface{}, path string) b
 func compareJSONFiles(devPath string, prodPath string, relPath string) {
 	devJSON, err := loadJSON(devPath)
 	if err != nil {
-		fmt.Printf("開発環境のJSONファイルの読み込みエラー: %s\n", err)
+		fmt.Printf("dirAのJSONファイルの読み込みエラー: %s\n", err)
 		return
 	}
 
 	prodJSON, err := loadJSON(prodPath)
 	if err != nil {
-		fmt.Printf("本番環境のJSONファイルの読み込みエラー: %s\n", err)
+		fmt.Printf("dirBのJSONファイルの読み込みエラー: %s\n", err)
 		return
 	}
 
@@ -170,16 +169,16 @@ func compareDirectories(devDir, prodDir string) {
 
 		// JSONファイルのみを対象とする
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".json") {
-			// production側の対応するファイルパスを構成
+			// dirB側の対応するファイルパスを構成
 			relPath, err := filepath.Rel(devDir, devPath)
 			if err != nil {
 				return err
 			}
 			prodPath := filepath.Join(prodDir, relPath)
 
-			// production側のファイルが存在するか確認
+			// dirB側のファイルが存在するか確認
 			if _, err := os.Stat(prodPath); os.IsNotExist(err) {
-				fmt.Printf("本番環境にファイルが存在しません: %s\n\n", prodPath)
+				fmt.Printf("dirBにファイルが存在しません: %s\n\n", prodPath)
 				return nil
 			}
 
@@ -191,15 +190,42 @@ func compareDirectories(devDir, prodDir string) {
 	})
 
 	if err != nil {
-		fmt.Printf("開発環境ディレクトリの走査中のエラー: %s\n", err)
+		fmt.Printf("dirAディレクトリの走査中のエラー: %s\n", err)
 	}
 }
 
 func main() {
-	// 比較するディレクトリのパス
-	developmentDir := "export/development"
-	productionDir := "export/production"
+	// コマンドライン引数としてディレクトリパスを受け取る
+	dirA := flag.String("dirA", "", "最初のディレクトリ (dirA) のパス")
+	dirB := flag.String("dirB", "", "二つ目のディレクトリ (dirB) のパス")
+
+	// 引数の解析
+	flag.Parse()
+
+	// 引数が指定されていない場合はエラーメッセージを表示して終了
+	if *dirA == "" {
+		fmt.Println("エラー: 最初のディレクトリパス (dirA) が必要です。--dirA でパスを指定してください。")
+		flag.Usage() // 使用方法の表示
+		os.Exit(1)
+	}
+
+	if *dirB == "" {
+		fmt.Println("エラー: 二つ目のディレクトリパス (dirB) が必要です。--dirB でパスを指定してください。")
+		flag.Usage() // 使用方法の表示
+		os.Exit(1)
+	}
+
+	// ディレクトリが存在するかチェック
+	if _, err := os.Stat(*dirA); os.IsNotExist(err) {
+		fmt.Printf("エラー: 最初のディレクトリ '%s' (dirA) が存在しません。\n", *dirA)
+		os.Exit(1)
+	}
+
+	if _, err := os.Stat(*dirB); os.IsNotExist(err) {
+		fmt.Printf("エラー: 二つ目のディレクトリ '%s' (dirB) が存在しません。\n", *dirB)
+		os.Exit(1)
+	}
 
 	// ディレクトリを再帰的に走査し、JSONファイルを比較
-	compareDirectories(developmentDir, productionDir)
+	compareDirectories(*dirA, *dirB)
 }
