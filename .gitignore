@@ -1,0 +1,14 @@
+
+# IDE/editor-specific files
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+# APP
+/export
+/tmp
+.air.toml
+/import/*.csv

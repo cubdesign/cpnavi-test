@@ -1,0 +1,11 @@
+version: '3'
+
+tasks:
+  getjson:
+    desc: "Get json"
+    cmds:
+      - go run cmd/cli/get-json/GetJson.go
+  hikaku:
+    desc: "Hikaku"
+    cmds:
+      - go run cmd/cli/hikaku/Hikaku.go
